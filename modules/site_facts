@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+
+import json
+import re
+import subprocess
+
+p = subprocess.Popen(
+    'ip -o addr show',
+    shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+)
+mgmt_addresses = []
+for line in p.stdout.readlines():
+    match_mgmt = re.match(
+        r'\s*\d+:\s(\w+).*inet\s+(10\.245\.\d+\.\d+)',
+        line, re.I
+    )
+    if match_mgmt:
+        mgmt_addresses.append({
+            'device': match_mgmt.group(1),
+            'address': match_mgmt.group(2)
+        })
+print json.dumps(
+    {
+        'ansible_facts': {
+            'ansible_mgmt_addresses': mgmt_addresses
+        }
+    }, indent=4
+)
+retval = p.wait()
