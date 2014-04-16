@@ -2,28 +2,62 @@
 
 import json
 import re
+import socket
+import struct
 import subprocess
 
-p = subprocess.Popen(
-    'ip -o addr show',
-    shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-)
-mgmt_addresses = []
-for line in p.stdout.readlines():
-    match_mgmt = re.match(
-        r'\s*\d+:\s(\w+).*inet\s+(10\.245\.\d+\.\d+)',
-        line, re.I
+def ip_in_network(mask, address):
+
+    mask_address, mask_bits = mask.split("/",1)
+    bit_val     = 2 ** 31
+    mask_bits   = int(mask_bits)
+    mask_val    = 0
+
+    while bit_val and mask_bits:
+        mask_val += bit_val
+        bit_val >>= 1
+        mask_bits -= 1
+
+    mask_map    = socket.inet_ntoa(
+        struct.pack(
+            "!I", struct.unpack(
+                "!I", socket.inet_aton(address)
+            )[0] & mask_val
+        )
     )
-    if match_mgmt:
-        mgmt_addresses.append({
-            'device': match_mgmt.group(1),
-            'address': match_mgmt.group(2)
-        })
-print json.dumps(
-    {
-        'ansible_facts': {
-            'ansible_mgmt_addresses': mgmt_addresses
-        }
-    }, indent=4
-)
-retval = p.wait()
+
+    return mask_address == mask_map
+
+if __name__ == '__main__':
+
+    mgmt_networks = {
+        "10.245.161.0/24": "10.245.161.1"
+        "10.10.0.0/16": "10.10.0.1"
+    }
+
+    p = subprocess.Popen(
+        'ip -o addr show',
+        shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    )
+    mgmt_addresses = []
+    for line in p.stdout.readlines():
+        match_ip = re.match(
+            r'\s*\d+:\s(\w+).*inet\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})',
+            line, re.I
+        )
+        if match_ip:
+            for network in mgmt_networks:
+                if ip_in_network(network, match_ip.group(2)):
+                    mgmt_addresses.append({
+                        'device': match_ip.group(1),
+                        'address': match_ip.group(2),
+                        'gw': mgmt_networks[network]
+                })
+    print json.dumps(
+        {
+            'ansible_facts': {
+                'ansible_mgmt_addresses': mgmt_addresses
+            }
+        }, indent=4
+    )
+    retval = p.wait()
