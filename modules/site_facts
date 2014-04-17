@@ -36,7 +36,7 @@ if __name__ == '__main__':
     }
 
     p = subprocess.Popen(
-        'ip -o addr show',
+        '/sbin/ip -o addr show',
         shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
     )
     mgmt_addresses = []
